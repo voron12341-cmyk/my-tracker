@@ -1,0 +1,954 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#4a7dff">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<title>Трекер: звички, тренування, роботи</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  :root {
+    --bg: #f4f6f8; --card: #fff; --text: #222; --muted: #667;
+    --blue: #4a7dff; --green: #4caf50; --orange: #ff9800;
+    --purple: #9c27b0; --border: #e3e6ea;
+    --safe-b: env(safe-area-inset-bottom, 0px);
+    --safe-t: env(safe-area-inset-top, 0px);
+  }
+  html, body { width: 100%; overflow-x: hidden; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg); color: var(--text);
+    padding: 12px;
+    padding-top: calc(12px + var(--safe-t));
+    padding-bottom: calc(12px + var(--safe-b));
+    max-width: 1000px; margin: 0 auto; line-height: 1.4;
+    font-size: 16px;
+  }
+  h1 { font-size: 1.35rem; margin-bottom: 12px; text-align: center; }
+  h2 { font-size: 1.1rem; margin-bottom: 10px; }
+  h3 { font-size: 0.95rem; margin-bottom: 8px; color: var(--muted); font-weight: 600; }
+
+  /* ===== TABS (sticky, зручні для пальця) ===== */
+  .tabs {
+    display: flex; gap: 6px; margin-bottom: 14px;
+    position: sticky; top: calc(var(--safe-t) + 4px); z-index: 50;
+    background: var(--bg); padding: 6px 0;
+    overflow-x: auto; -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  .tabs::-webkit-scrollbar { display: none; }
+  .tab-btn {
+    flex: 1 0 auto; padding: 12px 14px; border: 1px solid var(--border);
+    background: var(--card); border-radius: 10px; cursor: pointer;
+    font-size: 0.9rem; white-space: nowrap; min-height: 48px;
+    display: flex; align-items: center; justify-content: center; gap: 4px;
+  }
+  .tab-btn.active { background: var(--blue); color: #fff; border-color: var(--blue); }
+
+  .panel { display: none; }
+  .panel.active { display: block; }
+
+  .card {
+    background: var(--card); border-radius: 12px; padding: 14px;
+    margin-bottom: 12px; box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+  }
+
+  /* ===== FORMS ===== */
+  .add-form { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
+  .add-form input, .add-form select {
+    flex: 1; min-width: 140px; padding: 12px 14px;
+    border: 1px solid #ccc; border-radius: 10px; font-size: 16px;
+    min-height: 48px;
+  }
+  .add-form button, .btn {
+    padding: 12px 18px; border: none; border-radius: 10px;
+    background: var(--blue); color: #fff; font-size: 1rem; cursor: pointer;
+    min-height: 48px; font-weight: 500;
+  }
+  .btn:hover, .add-form button:hover { filter: brightness(0.92); }
+  .btn:active { transform: scale(0.97); }
+  .btn.ghost { background: transparent; color: var(--blue); border: 1px solid var(--blue); }
+  .btn.small { padding: 8px 12px; font-size: 0.85rem; min-height: 40px; }
+
+  /* ===== HABITS ===== */
+  .habit-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; gap: 8px; }
+  .habit-name { font-weight: 600; font-size: 1rem; word-break: break-word; }
+  .days { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; }
+  .day {
+    aspect-ratio: 1; border-radius: 10px; border: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.75rem; cursor: pointer; user-select: none;
+    background: #fafafa; transition: background 0.15s; font-weight: 500;
+    min-height: 40px;
+  }
+  .day:hover { background: #eef2ff; }
+  .day.done { background: var(--green); color: #fff; border-color: var(--green); }
+  .day.today { outline: 2px solid var(--blue); outline-offset: -2px; }
+  .stats { font-size: 0.82rem; color: var(--muted); margin-top: 8px; }
+  .empty { text-align: center; color: #888; padding: 30px 0; font-size: 0.95rem; }
+
+  /* ===== CALENDAR ===== */
+  .cal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; gap: 8px; }
+  .cal-header h2 { flex: 1; text-align: center; font-size: 1rem; }
+  .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+  .cal-cell {
+    min-height: 58px; border-radius: 8px; border: 1px solid var(--border);
+    padding: 3px; font-size: 0.75rem; cursor: pointer; background: #fafafa;
+    display: flex; flex-direction: column; position: relative;
+    min-width: 0; overflow: hidden;
+  }
+  .cal-cell:hover { background: #eef2ff; }
+  .cal-cell:active { background: #dde6ff; }
+  .cal-cell.other-month { opacity: 0.35; }
+  .cal-cell.off { background: #fff3e0; border-color: #ffcc80; }
+  .cal-cell.today { outline: 2px solid var(--blue); outline-offset: -2px; }
+  .cal-day-num { font-weight: 600; font-size: 0.8rem; }
+  .cal-tags { display: flex; gap: 2px; margin-top: auto; flex-wrap: wrap; }
+  .tag {
+    font-size: 0.55rem; padding: 1px 3px; border-radius: 4px;
+    color: #fff; font-weight: 600; white-space: nowrap;
+    max-width: 100%; overflow: hidden; text-overflow: ellipsis;
+  }
+  .cal-dots { display: flex; gap: 3px; margin-top: 2px; flex-wrap: wrap; }
+  .dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+  .dot.gym { background: var(--purple); }
+  .dot.cardio { background: var(--orange); }
+  .dot.habit { background: var(--green); }
+  .cal-legend { display: flex; gap: 10px; font-size: 0.75rem; color: var(--muted); margin-top: 10px; flex-wrap: wrap; }
+  .cal-legend span { display: flex; align-items: center; gap: 4px; }
+
+  /* ===== JOBS ===== */
+  .job-item {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 10px 12px; border-radius: 8px; background: #f7f8fa; margin-bottom: 6px;
+    gap: 8px;
+  }
+  .job-item > div { min-width: 0; flex: 1; }
+  .job-swatch {
+    display: inline-block; width: 14px; height: 14px; border-radius: 4px;
+    margin-right: 6px; vertical-align: middle; flex-shrink: 0;
+  }
+  .job-name { font-weight: 600; word-break: break-word; }
+  .job-stats { font-size: 0.78rem; color: var(--muted); }
+
+  /* ===== MONTH SUMMARY ===== */
+  .month-summary {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(95px, 1fr));
+    gap: 8px; margin-top: 12px;
+  }
+  .ms-item {
+    border-radius: 10px; padding: 10px 8px; text-align: center; background: #f7f8fa;
+  }
+  .ms-item.work { background: #e3f2fd; }
+  .ms-item.off { background: #fff3e0; }
+  .ms-item.total { background: #eef2ff; }
+  .ms-item .val { font-size: 1.3rem; font-weight: 700; }
+  .ms-item .lbl { font-size: 0.72rem; color: var(--muted); }
+
+  .jobs-month-grid {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+    gap: 8px; margin-top: 10px;
+  }
+  .job-month-card {
+    border-radius: 10px; padding: 10px 12px; background: #f7f8fa;
+    border-left: 4px solid #ccc;
+  }
+  .job-month-card .job-title { font-weight: 600; font-size: 0.85rem; word-break: break-word; }
+  .job-month-card .job-val { font-size: 1.2rem; font-weight: 700; }
+  .job-month-card .job-sub { font-size: 0.7rem; color: var(--muted); }
+
+  /* ===== TRAINING ===== */
+  .training-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .training-row select, .training-row input {
+    padding: 10px 12px; border: 1px solid #ccc; border-radius: 10px;
+    font-size: 16px; min-height: 48px; flex: 1; min-width: 140px;
+  }
+  .training-list { margin-top: 12px; }
+  .training-item {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 10px 12px; border-radius: 10px; background: #f7f8fa; margin-bottom: 6px;
+    gap: 8px; flex-wrap: wrap;
+  }
+  .training-item > div { flex: 1; min-width: 0; }
+  .badge { padding: 3px 9px; border-radius: 12px; font-size: 0.75rem; color: #fff; }
+  .badge.strength { background: var(--purple); }
+  .badge.cardio { background: var(--orange); }
+  .badge.other { background: #78909c; }
+
+  /* ===== CHARTS ===== */
+  .chart-box { position: relative; height: 280px; margin-bottom: 16px; }
+  .summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 8px; margin-bottom: 14px; }
+  .summary-item { background: #f7f8fa; border-radius: 10px; padding: 10px 8px; text-align: center; }
+  .summary-item .val { font-size: 1.3rem; font-weight: 700; }
+  .summary-item .lbl { font-size: 0.72rem; color: var(--muted); word-break: break-word; }
+  .chart-toggle { display: flex; gap: 6px; margin-bottom: 10px; }
+  .chart-toggle .tab-btn { flex: 1; }
+
+  .muted { color: var(--muted); font-size: 0.82rem; }
+  .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .row .btn { flex: 1 1 auto; }
+
+  /* ===== MODAL (full-screen on mobile) ===== */
+  .modal-bg {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.45);
+    display: none; align-items: flex-end; justify-content: center;
+    z-index: 200; padding: 0;
+  }
+  .modal-bg.show { display: flex; }
+  .modal {
+    background: #fff; border-radius: 18px 18px 0 0; padding: 20px 18px;
+    padding-bottom: calc(20px + var(--safe-b));
+    max-width: 500px; width: 100%;
+    max-height: 90vh; overflow-y: auto;
+    box-shadow: 0 -10px 40px rgba(0,0,0,0.2);
+    animation: slideUp 0.22s ease-out;
+  }
+  @keyframes slideUp {
+    from { transform: translateY(100%); }
+    to { transform: translateY(0); }
+  }
+  .modal::before {
+    content: ''; display: block; width: 40px; height: 4px; background: #ddd;
+    border-radius: 2px; margin: -8px auto 12px;
+  }
+  .modal h3 { color: var(--text); margin-bottom: 10px; font-size: 0.9rem; }
+  .modal-day { font-size: 1.15rem; font-weight: 700; margin-bottom: 14px; }
+  .modal-jobs { display: flex; flex-direction: column; gap: 8px; margin-bottom: 14px; }
+  .modal-job-btn {
+    display: flex; align-items: center; gap: 10px;
+    padding: 14px 14px; border: 1px solid var(--border); background: #fafafa;
+    border-radius: 10px; cursor: pointer; text-align: left; font-size: 1rem;
+    min-height: 52px; width: 100%;
+  }
+  .modal-job-btn:hover { background: #eef2ff; }
+  .modal-job-btn.selected { background: #e3f2fd; border-color: var(--blue); border-width: 2px; padding: 13px; }
+  .modal-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+  .modal-actions .btn { flex: 1 1 auto; min-height: 48px; }
+  .modal-actions .btn.close-btn { flex: 1 1 100%; }
+
+  /* ===== MOBILE OPTIMIZATIONS (<= 600px) ===== */
+  @media (max-width: 600px) {
+    body { padding: 8px; padding-top: calc(8px + var(--safe-t)); padding-bottom: calc(8px + var(--safe-b)); }
+    h1 { font-size: 1.2rem; margin-bottom: 10px; }
+    h2 { font-size: 1rem; }
+    .card { padding: 12px; border-radius: 10px; }
+    .tabs { gap: 4px; padding: 4px 0; margin-bottom: 10px; }
+    .tab-btn { padding: 10px 10px; font-size: 0.82rem; min-height: 44px; }
+    .tab-btn .tab-label { display: none; }
+    .tab-btn .tab-icon { font-size: 1.2rem; }
+    .cal-grid { gap: 3px; }
+    .cal-cell { min-height: 52px; padding: 2px; border-radius: 6px; }
+    .cal-day-num { font-size: 0.72rem; }
+    .tag { font-size: 0.5rem; padding: 1px 2px; border-radius: 3px; }
+    .day { min-height: 42px; font-size: 0.7rem; border-radius: 8px; }
+    .days { gap: 4px; }
+    .chart-box { height: 240px; }
+    .add-form { gap: 6px; }
+    .add-form input, .add-form select { min-width: 100%; }
+    .add-form button { width: 100%; }
+    .training-row select, .training-row input { min-width: 100%; }
+    .training-row button { width: 100%; }
+    .month-summary { grid-template-columns: repeat(3, 1fr); gap: 6px; }
+    .ms-item { padding: 8px 4px; }
+    .ms-item .val { font-size: 1.15rem; }
+    .ms-item .lbl { font-size: 0.65rem; }
+    .jobs-month-grid { grid-template-columns: repeat(2, 1fr); gap: 6px; }
+    .summary-grid { grid-template-columns: repeat(2, 1fr); }
+    .modal-actions .btn { flex: 1 1 calc(50% - 4px); }
+  }
+
+  /* ===== VERY SMALL (<= 380px) ===== */
+  @media (max-width: 380px) {
+    .cal-cell { min-height: 46px; }
+    .cal-day-num { font-size: 0.68rem; }
+    .day { min-height: 38px; font-size: 0.65rem; }
+    .tab-btn { padding: 8px 8px; font-size: 0.75rem; min-height: 40px; }
+    h1 { font-size: 1.05rem; }
+    .ms-item .val { font-size: 1rem; }
+  }
+
+  /* ===== iPad/Tablet ===== */
+  @media (min-width: 601px) and (max-width: 900px) {
+    .modal { border-radius: 18px; padding: 24px; margin: auto; }
+    .modal-bg { align-items: center; padding: 20px; }
+    .tab-btn .tab-label { display: inline; }
+  }
+
+  @media (min-width: 901px) {
+    .tab-btn .tab-label { display: inline; }
+    .tab-btn .tab-icon { display: none; }
+    .modal-bg { align-items: center; padding: 20px; }
+    .modal { border-radius: 18px; padding: 24px; }
+    .modal::before { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<h1>📊 Мій трекер</h1>
+
+<div class="tabs">
+  <button class="tab-btn active" data-tab="habits">
+    <span class="tab-icon">✅</span><span class="tab-label">Звички</span>
+  </button>
+  <button class="tab-btn" data-tab="calendar">
+    <span class="tab-icon">🗓️</span><span class="tab-label">Календар</span>
+  </button>
+  <button class="tab-btn" data-tab="training">
+    <span class="tab-icon">💪</span><span class="tab-label">Тренування</span>
+  </button>
+  <button class="tab-btn" data-tab="progress">
+    <span class="tab-icon">📈</span><span class="tab-label">Прогрес</span>
+  </button>
+</div>
+
+<!-- ================= HABITS ================= -->
+<div class="panel active" id="panel-habits">
+  <div class="add-form">
+    <input id="habitInput" type="text" placeholder="Нова звичка" maxlength="60" inputmode="text" autocomplete="off">
+    <button id="addHabitBtn">Додати</button>
+  </div>
+  <div id="habits"></div>
+</div>
+
+<!-- ================= CALENDAR ================= -->
+<div class="panel" id="panel-calendar">
+  <div class="card">
+    <h2>Мої роботи</h2>
+    <div class="add-form" style="margin-top:10px">
+      <input id="jobInput" type="text" placeholder="Назва роботи" maxlength="30" autocomplete="off">
+      <input id="jobColor" type="color" value="#3f51b5" style="flex:0 0 56px; padding:4px; height:48px; min-width:56px;">
+      <button id="addJobBtn">Додати</button>
+    </div>
+    <div id="jobsList"></div>
+  </div>
+
+  <div class="card">
+    <div class="cal-header">
+      <button class="btn ghost small" id="prevMonth">←</button>
+      <h2 id="calTitle">—</h2>
+      <button class="btn ghost small" id="nextMonth">→</button>
+    </div>
+    <div class="cal-grid" id="calGrid"></div>
+    <div class="cal-legend">
+      <span><span class="dot" style="background:#ffcc80"></span>Вихідний</span>
+      <span><span class="dot gym"></span>Силове</span>
+      <span><span class="dot cardio"></span>Кардіо</span>
+      <span><span class="dot habit"></span>Звичка</span>
+    </div>
+    <p class="muted" style="margin-top:10px">Клік по дню — вибір роботи / вихідний / очистити.</p>
+  </div>
+
+  <div class="card">
+    <h3 id="monthSummaryTitle">Підсумок за місяць</h3>
+    <div class="month-summary" id="monthSummary"></div>
+    <h3 style="margin-top:16px">По роботах за цей місяць</h3>
+    <div class="jobs-month-grid" id="jobsMonthGrid"></div>
+  </div>
+
+  <div class="card">
+    <h3>Швидке налаштування</h3>
+    <div class="row">
+      <button class="btn small ghost" id="markWeekendsOff">Сб–Нд — вихідні</button>
+      <button class="btn small ghost" id="clearMonth">Очистити місяць</button>
+    </div>
+  </div>
+</div>
+
+<!-- ================= TRAINING ================= -->
+<div class="panel" id="panel-training">
+  <div class="card">
+    <h2>Додати тренування</h2>
+    <div class="training-row" style="margin-top:10px">
+      <input type="date" id="trainDate">
+      <select id="trainType">
+        <option value="strength">Силове</option>
+        <option value="cardio">Кардіо</option>
+        <option value="other">Інше</option>
+      </select>
+      <input type="text" id="trainNote" placeholder="Нотатка (необов'язково)" maxlength="80" autocomplete="off">
+      <button class="btn" id="addTrainBtn">Додати</button>
+    </div>
+  </div>
+  <div class="card">
+    <h2>Останні тренування</h2>
+    <div class="training-list" id="trainingList"></div>
+  </div>
+</div>
+
+<!-- ================= PROGRESS ================= -->
+<div class="panel" id="panel-progress">
+  <div class="chart-toggle">
+    <button class="tab-btn active" data-range="month">Місяць</button>
+    <button class="tab-btn" data-range="year">Рік</button>
+  </div>
+  <div class="summary-grid" id="summaryGrid"></div>
+  <div class="card">
+    <h3>Звички — виконано днів</h3>
+    <div class="chart-box"><canvas id="chartHabits"></canvas></div>
+  </div>
+  <div class="card">
+    <h3>Тренування — кількість</h3>
+    <div class="chart-box"><canvas id="chartTraining"></canvas></div>
+  </div>
+  <div class="card">
+    <h3>Робота — дні по кожній роботі</h3>
+    <div class="chart-box"><canvas id="chartWork"></canvas></div>
+  </div>
+</div>
+
+<!-- ================= MODAL ================= -->
+<div class="modal-bg" id="dayModal">
+  <div class="modal">
+    <div class="modal-day" id="modalDayTitle">—</div>
+    <h3>Позначити роботу:</h3>
+    <div class="modal-jobs" id="modalJobs"></div>
+    <div class="modal-actions">
+      <button class="btn ghost small" id="modalOff">Вихідний</button>
+      <button class="btn ghost small" id="modalClear">Очистити</button>
+      <button class="btn small close-btn" id="modalClose">Закрити</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ============ STORAGE ============ */
+const KEY = 'myTracker_v3';
+let state = load();
+
+function defaultState() {
+  return { habits: [], calendar: {}, trainings: [], jobs: [] };
+}
+function load() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(KEY));
+    if (!raw) return defaultState();
+    const s = Object.assign(defaultState(), raw);
+    if (!s.jobs) s.jobs = [];
+    Object.keys(s.calendar).forEach(k => {
+      if (s.calendar[k] === 'work') s.calendar[k] = { __legacy: true };
+    });
+    return s;
+  } catch { return defaultState(); }
+}
+function save() { localStorage.setItem(KEY, JSON.stringify(state)); }
+
+/* ============ HELPERS ============ */
+const iso = d => {
+  const x = new Date(d); x.setHours(12,0,0,0);
+  return x.toISOString().slice(0,10);
+};
+const todayIso = () => iso(new Date());
+const MONTHS_UK = ['Січень','Лютий','Березень','Квітень','Травень','Червень','Липень','Серпень','Вересень','Жовтень','Листопад','Грудень'];
+const MONTHS_SHORT = ['Січ','Лют','Бер','Кві','Тра','Чер','Лип','Сер','Вер','Жов','Лис','Гру'];
+const WEEKDAYS_UK = ['Пн','Вт','Ср','Чт','Пт','Сб','Нд'];
+function escapeHtml(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+function genId() { return 'j' + Date.now() + Math.random().toString(36).slice(2,6); }
+function jobById(id) { return state.jobs.find(j => j.id === id); }
+function isWorkDay(v) { return v && typeof v === 'object'; }
+function isOffDay(v) { return v === 'off'; }
+
+/* ============ TABS ============ */
+document.querySelectorAll('.tab-btn[data-tab]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.tab-btn[data-tab]').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('panel-' + btn.dataset.tab).classList.add('active');
+    if (btn.dataset.tab === 'progress') renderCharts();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  });
+});
+
+/* ============ JOBS ============ */
+function renderJobs() {
+  const el = document.getElementById('jobsList');
+  if (!state.jobs.length) {
+    el.innerHTML = '<div class="muted">Ще немає робіт. Додайте першу вище ⬆️</div>';
+    return;
+  }
+  el.innerHTML = state.jobs.map(j => {
+    const monthCount = countJobMonth(j.id);
+    const yearCount = countJobYear(j.id);
+    return `<div class="job-item">
+      <div>
+        <span class="job-swatch" style="background:${j.color}"></span>
+        <span class="job-name">${escapeHtml(j.name)}</span>
+        <div class="job-stats">За рік: ${yearCount} · За місяць: ${monthCount}</div>
+      </div>
+      <button class="btn small ghost" onclick="removeJob('${j.id}')" style="flex-shrink:0">🗑️</button>
+    </div>`;
+  }).join('');
+}
+function countJobMonth(jobId) {
+  const y = calView.getFullYear(), m = calView.getMonth();
+  let c = 0;
+  for (let d = 1; d <= new Date(y, m+1, 0).getDate(); d++) {
+    const v = state.calendar[iso(new Date(y, m, d))];
+    if (isWorkDay(v) && v[jobId]) c++;
+  }
+  return c;
+}
+function countJobYear(jobId) {
+  const y = new Date().getFullYear();
+  let c = 0;
+  Object.entries(state.calendar).forEach(([k, v]) => {
+    if (k.startsWith(String(y)) && isWorkDay(v) && v[jobId]) c++;
+  });
+  return c;
+}
+function addJob() {
+  const inp = document.getElementById('jobInput');
+  const name = inp.value.trim();
+  if (!name) return;
+  const color = document.getElementById('jobColor').value;
+  state.jobs.push({ id: genId(), name, color });
+  inp.value = ''; save(); renderJobs(); renderCalendar(); renderCharts();
+}
+function removeJob(id) {
+  if (!confirm('Видалити цю роботу? Позначки днів для неї теж зникнуть.')) return;
+  state.jobs = state.jobs.filter(j => j.id !== id);
+  Object.keys(state.calendar).forEach(k => {
+    const v = state.calendar[k];
+    if (isWorkDay(v) && v[id]) {
+      delete v[id];
+      if (Object.keys(v).length === 0) delete state.calendar[k];
+    }
+  });
+  save(); renderJobs(); renderCalendar(); renderCharts();
+}
+document.getElementById('addJobBtn').addEventListener('click', addJob);
+document.getElementById('jobInput').addEventListener('keydown', e => { if(e.key==='Enter') addJob(); });
+
+/* ============ HABITS ============ */
+function getLast7Days() {
+  const days = []; const t = new Date();
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date(t); d.setDate(t.getDate() - i);
+    days.push({ iso: iso(d), label: WEEKDAYS_UK[(d.getDay()+6)%7] });
+  }
+  return days;
+}
+function renderHabits() {
+  const c = document.getElementById('habits');
+  const days = getLast7Days(); const tIso = todayIso();
+  if (!state.habits.length) {
+    c.innerHTML = '<div class="empty">Ще немає звичок. Додайте першу! 🙂</div>';
+    return;
+  }
+  c.innerHTML = state.habits.map((h,i) => {
+    const cells = days.map(d => {
+      const done = !!h.done[d.iso];
+      const isToday = d.iso === tIso;
+      return `<div class="day ${done?'done':''} ${isToday?'today':''}"
+                   data-habit="${i}" data-day="${d.iso}" title="${d.iso}">${d.label}</div>`;
+    }).join('');
+    return `<div class="card">
+      <div class="habit-header">
+        <span class="habit-name">${escapeHtml(h.name)}</span>
+        <button class="btn small ghost" onclick="removeHabit(${i})" style="flex-shrink:0">🗑️</button>
+      </div>
+      <div class="days">${cells}</div>
+      <div class="stats">Серія: ${calcStreak(h)} дн. 🔥 · За рік: ${countHabitYear(h)} дн.</div>
+    </div>`;
+  }).join('');
+  c.querySelectorAll('.day').forEach(el => {
+    el.addEventListener('click', () => {
+      const h = state.habits[+el.dataset.habit];
+      const d = el.dataset.day;
+      h.done[d] = !h.done[d];
+      save(); renderHabits();
+    });
+  });
+}
+function calcStreak(habit) {
+  let s = 0; const d = new Date();
+  while (true) {
+    const k = iso(d);
+    if (habit.done[k]) { s++; d.setDate(d.getDate()-1); } else break;
+  }
+  return s;
+}
+function countHabitYear(h) {
+  const y = new Date().getFullYear();
+  return Object.keys(h.done).filter(k => h.done[k] && k.startsWith(String(y))).length;
+}
+function addHabit() {
+  const inp = document.getElementById('habitInput');
+  const name = inp.value.trim(); if (!name) return;
+  state.habits.push({ name, done: {} });
+  inp.value = ''; save(); renderHabits();
+}
+function removeHabit(i) {
+  if (confirm('Видалити звичку?')) { state.habits.splice(i,1); save(); renderHabits(); }
+}
+document.getElementById('addHabitBtn').addEventListener('click', addHabit);
+document.getElementById('habitInput').addEventListener('keydown', e => { if(e.key==='Enter') addHabit(); });
+
+/* ============ CALENDAR ============ */
+let calView = new Date(); calView.setDate(1);
+
+function renderCalendar() {
+  const y = calView.getFullYear(), m = calView.getMonth();
+  document.getElementById('calTitle').textContent = `${MONTHS_UK[m]} ${y}`;
+
+  const first = new Date(y, m, 1);
+  const startDow = (first.getDay() + 6) % 7;
+  const start = new Date(first); start.setDate(first.getDate() - startDow);
+
+  const grid = document.getElementById('calGrid'); grid.innerHTML = '';
+  WEEKDAYS_UK.forEach(w => {
+    const el = document.createElement('div');
+    el.style.cssText = 'font-size:0.7rem;text-align:center;color:#667;font-weight:600;padding:3px 0';
+    el.textContent = w; grid.appendChild(el);
+  });
+
+  const tIso = todayIso();
+  let cellsData = [];
+  for (let i = 0; i < 42; i++) {
+    const d = new Date(start); d.setDate(start.getDate() + i); cellsData.push(d);
+  }
+  if (cellsData.slice(35).every(d => d.getMonth() !== m)) cellsData = cellsData.slice(0, 35);
+
+  cellsData.forEach(d => {
+    const k = iso(d);
+    const other = d.getMonth() !== m;
+    const v = state.calendar[k];
+    const cls = ['cal-cell'];
+    if (other) cls.push('other-month');
+    if (isOffDay(v)) cls.push('off');
+    if (k === tIso) cls.push('today');
+
+    const cell = document.createElement('div');
+    cell.className = cls.join(' ');
+    cell.dataset.day = k;
+
+    let tagsHtml = '';
+    if (isWorkDay(v)) {
+      const ids = Object.keys(v).filter(id => v[id]);
+      tagsHtml = ids.map(id => {
+        const j = jobById(id);
+        if (!j) return `<span class="tag" style="background:#999">?</span>`;
+        return `<span class="tag" style="background:${j.color}" title="${escapeHtml(j.name)}">${escapeHtml(j.name.slice(0,5))}</span>`;
+      }).join('');
+    }
+
+    const trainingsToday = state.trainings.filter(t => t.date === k);
+    const habitDone = state.habits.some(h => h.done[k]);
+
+    cell.innerHTML = `
+      <div class="cal-day-num">${d.getDate()}</div>
+      <div class="cal-tags">${tagsHtml}</div>
+      <div class="cal-dots">
+        ${trainingsToday.map(t => `<span class="dot ${t.type === 'strength' ? 'gym' : t.type === 'cardio' ? 'cardio' : ''}"></span>`).join('')}
+        ${habitDone ? '<span class="dot habit"></span>' : ''}
+      </div>`;
+
+    cell.addEventListener('click', () => openDayModal(k, d));
+    grid.appendChild(cell);
+  });
+
+  renderMonthSummary(y, m);
+  renderJobs();
+}
+
+function renderMonthSummary(y, m) {
+  const daysInMonth = new Date(y, m+1, 0).getDate();
+  let work = 0, off = 0, unmarked = 0, trainings = 0, habitDays = 0;
+
+  for (let d = 1; d <= daysInMonth; d++) {
+    const k = iso(new Date(y, m, d));
+    const v = state.calendar[k];
+    if (isWorkDay(v)) work++;
+    else if (isOffDay(v)) off++;
+    else unmarked++;
+    if (state.trainings.some(t => t.date === k)) trainings++;
+    if (state.habits.some(h => h.done[k])) habitDays++;
+  }
+
+  document.getElementById('monthSummaryTitle').textContent = `Підсумок за ${MONTHS_UK[m]} ${y}`;
+  document.getElementById('monthSummary').innerHTML = `
+    <div class="ms-item work"><div class="val">${work}</div><div class="lbl">Робочих</div></div>
+    <div class="ms-item off"><div class="val">${off}</div><div class="lbl">Вихідних</div></div>
+    <div class="ms-item"><div class="val">${unmarked}</div><div class="lbl">Не познач.</div></div>
+    <div class="ms-item total"><div class="val">${daysInMonth}</div><div class="lbl">Усього</div></div>
+    <div class="ms-item"><div class="val">${trainings}</div><div class="lbl">Тренувань</div></div>
+    <div class="ms-item"><div class="val">${habitDays}</div><div class="lbl">Звичок</div></div>`;
+
+  const grid = document.getElementById('jobsMonthGrid');
+  if (!state.jobs.length) {
+    grid.innerHTML = '<div class="muted">Додайте роботи, щоб побачити розподіл.</div>';
+    return;
+  }
+  grid.innerHTML = state.jobs.map(j => {
+    const c = countJobMonth(j.id);
+    return `<div class="job-month-card" style="border-left-color:${j.color}">
+      <div class="job-title">${escapeHtml(j.name)}</div>
+      <div class="job-val">${c}</div>
+      <div class="job-sub">днів</div>
+    </div>`;
+  }).join('');
+}
+
+/* ============ MODAL ============ */
+let modalDayKey = null;
+function openDayModal(k, dateObj) {
+  modalDayKey = k;
+  const dd = dateObj.toLocaleDateString('uk-UA', { day: 'numeric', month: 'long', year: 'numeric' });
+  document.getElementById('modalDayTitle').textContent = dd;
+
+  const current = state.calendar[k];
+  const currentJobs = isWorkDay(current) ? current : {};
+
+  const jobsEl = document.getElementById('modalJobs');
+  if (!state.jobs.length) {
+    jobsEl.innerHTML = '<div class="muted">Спочатку додайте роботу у вкладці «Календар» ⬆️</div>';
+  } else {
+    jobsEl.innerHTML = state.jobs.map(j => {
+      const sel = currentJobs[j.id] ? 'selected' : '';
+      return `<button class="modal-job-btn ${sel}" data-job="${j.id}">
+        <span class="job-swatch" style="background:${j.color}"></span>
+        ${escapeHtml(j.name)}
+      </button>`;
+    }).join('');
+    jobsEl.querySelectorAll('.modal-job-btn').forEach(b => {
+      b.addEventListener('click', () => toggleJobOnDay(modalDayKey, b.dataset.job));
+    });
+  }
+  document.getElementById('dayModal').classList.add('show');
+  document.body.style.overflow = 'hidden';
+}
+function closeDayModal() {
+  document.getElementById('dayModal').classList.remove('show');
+  document.body.style.overflow = '';
+  modalDayKey = null;
+}
+function toggleJobOnDay(k, jobId) {
+  let v = state.calendar[k];
+  if (!isWorkDay(v)) v = {};
+  if (v[jobId]) delete v[jobId];
+  else v[jobId] = true;
+  if (Object.keys(v).length === 0) delete state.calendar[k];
+  else state.calendar[k] = v;
+  save(); renderCalendar();
+  const dateObj = new Date(k + 'T12:00:00');
+  openDayModal(k, dateObj);
+}
+document.getElementById('modalClose').addEventListener('click', closeDayModal);
+document.getElementById('modalOff').addEventListener('click', () => {
+  if (modalDayKey) { state.calendar[modalDayKey] = 'off'; save(); renderCalendar(); closeDayModal(); }
+});
+document.getElementById('modalClear').addEventListener('click', () => {
+  if (modalDayKey) { delete state.calendar[modalDayKey]; save(); renderCalendar(); closeDayModal(); }
+});
+document.getElementById('dayModal').addEventListener('click', e => {
+  if (e.target.id === 'dayModal') closeDayModal();
+});
+
+document.getElementById('prevMonth').addEventListener('click', () => {
+  calView.setMonth(calView.getMonth() - 1); renderCalendar();
+});
+document.getElementById('nextMonth').addEventListener('click', () => {
+  calView.setMonth(calView.getMonth() + 1); renderCalendar();
+});
+document.getElementById('markWeekendsOff').addEventListener('click', () => {
+  const y = calView.getFullYear(), m = calView.getMonth();
+  const daysInMonth = new Date(y, m+1, 0).getDate();
+  for (let d = 1; d <= daysInMonth; d++) {
+    const dt = new Date(y, m, d); const dow = dt.getDay();
+    if (dow === 0 || dow === 6) {
+      if (!isWorkDay(state.calendar[iso(dt)])) state.calendar[iso(dt)] = 'off';
+    }
+  }
+  save(); renderCalendar();
+});
+document.getElementById('clearMonth').addEventListener('click', () => {
+  if (!confirm('Очистити всі позначки за цей місяць?')) return;
+  const y = calView.getFullYear(), m = calView.getMonth();
+  const daysInMonth = new Date(y, m+1, 0).getDate();
+  for (let d = 1; d <= daysInMonth; d++) {
+    delete state.calendar[iso(new Date(y, m, d))];
+  }
+  save(); renderCalendar();
+});
+
+/* ============ TRAINING ============ */
+function renderTraining() {
+  const list = document.getElementById('trainingList');
+  const items = [...state.trainings].sort((a,b) => b.date.localeCompare(a.date)).slice(0, 30);
+  if (!items.length) { list.innerHTML = '<div class="empty">Ще немає тренувань.</div>'; return; }
+  list.innerHTML = items.map(t => {
+    const idx = state.trainings.indexOf(t);
+    const label = { strength:'Силове', cardio:'Кардіо', other:'Інше' }[t.type] || t.type;
+    return `<div class="training-item">
+      <div>
+        <span class="badge ${t.type}">${label}</span>
+        <span style="margin-left:6px;font-size:0.9rem">${t.date}</span>
+        ${t.note ? `<div class="muted" style="margin-top:2px">— ${escapeHtml(t.note)}</div>` : ''}
+      </div>
+      <button class="btn small ghost" onclick="removeTraining(${idx})" style="flex-shrink:0">✕</button>
+    </div>`;
+  }).join('');
+}
+function removeTraining(i) {
+  if (confirm('Видалити тренування?')) { state.trainings.splice(i,1); save(); renderTraining(); renderCalendar(); }
+}
+document.getElementById('addTrainBtn').addEventListener('click', () => {
+  const date = document.getElementById('trainDate').value || todayIso();
+  const type = document.getElementById('trainType').value;
+  const note = document.getElementById('trainNote').value.trim();
+  state.trainings.push({ date, type, note });
+  document.getElementById('trainNote').value = '';
+  save(); renderTraining(); renderCalendar();
+});
+
+/* ============ PROGRESS ============ */
+let chartHabits, chartTraining, chartWork;
+let progressRange = 'month';
+
+document.querySelectorAll('.chart-toggle .tab-btn').forEach(b => {
+  b.addEventListener('click', () => {
+    document.querySelectorAll('.chart-toggle .tab-btn').forEach(x => x.classList.remove('active'));
+    b.classList.add('active');
+    progressRange = b.dataset.range;
+    renderCharts();
+  });
+});
+function getPeriodLabels() {
+  if (progressRange === 'month') {
+    const now = new Date(); const labels = []; const keys = [];
+    for (let i = 11; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      labels.push(MONTHS_SHORT[d.getMonth()]);
+      keys.push(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`);
+    }
+    return { labels, keys };
+  } else {
+    const nowY = new Date().getFullYear(); const labels = []; const keys = [];
+    for (let i = 4; i >= 0; i--) { labels.push(String(nowY - i)); keys.push(String(nowY - i)); }
+    return { labels, keys };
+  }
+}
+function aggregateHabits(info) {
+  const sums = info.keys.map(() => 0);
+  state.habits.forEach(h => {
+    Object.entries(h.done).forEach(([k, v]) => {
+      if (!v) return;
+      const mk = progressRange === 'month' ? k.slice(0,7) : k.slice(0,4);
+      const idx = info.keys.indexOf(mk); if (idx >= 0) sums[idx]++;
+    });
+  });
+  return sums;
+}
+function aggregateTraining(info) {
+  const sums = info.keys.map(() => 0);
+  state.trainings.forEach(t => {
+    const mk = progressRange === 'month' ? t.date.slice(0,7) : t.date.slice(0,4);
+    const idx = info.keys.indexOf(mk); if (idx >= 0) sums[idx]++;
+  });
+  return sums;
+}
+function aggregateWorkPerJob(info) {
+  const result = {};
+  state.jobs.forEach(j => { result[j.id] = info.keys.map(() => 0); });
+  Object.entries(state.calendar).forEach(([k, v]) => {
+    if (!isWorkDay(v)) return;
+    const mk = progressRange === 'month' ? k.slice(0,7) : k.slice(0,4);
+    const idx = info.keys.indexOf(mk); if (idx < 0) return;
+    Object.keys(v).forEach(jobId => {
+      if (v[jobId] && result[jobId]) result[jobId][idx]++;
+    });
+  });
+  return result;
+}
+function renderSummary(info) {
+  const habits = aggregateHabits(info);
+  const train = aggregateTraining(info);
+  const workPerJob = aggregateWorkPerJob(info);
+  const totalWork = Object.values(workPerJob).reduce((acc, arr) => acc.map((x,i)=>x+arr[i]), info.keys.map(()=>0));
+  const sum = a => a.reduce((x,y)=>x+y,0);
+
+  let html = `
+    <div class="summary-item"><div class="val">${sum(habits)}</div><div class="lbl">Звички</div></div>
+    <div class="summary-item"><div class="val">${sum(train)}</div><div class="lbl">Тренувань</div></div>
+    <div class="summary-item"><div class="val">${sum(totalWork)}</div><div class="lbl">Робочих днів</div></div>`;
+  state.jobs.forEach(j => {
+    html += `<div class="summary-item" style="border-left:4px solid ${j.color}">
+      <div class="val">${sum(workPerJob[j.id])}</div>
+      <div class="lbl">${escapeHtml(j.name)}</div>
+    </div>`;
+  });
+  document.getElementById('summaryGrid').innerHTML = html;
+}
+function renderCharts() {
+  const info = getPeriodLabels();
+  renderSummary(info);
+
+  const habitsData = aggregateHabits(info);
+  const trainData = aggregateTraining(info);
+  const workPerJob = aggregateWorkPerJob(info);
+
+  const workDatasets = state.jobs.map(j => ({
+    label: j.name,
+    data: workPerJob[j.id],
+    backgroundColor: j.color
+  }));
+
+  const isMobile = window.innerWidth < 600;
+  const chartOpts = (label, color, stacked) => ({
+    responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { display: false } },
+    scales: {
+      x: { stacked: !!stacked, ticks: { font: { size: isMobile ? 10 : 12 } } },
+      y: { stacked: !!stacked, beginAtZero: true, ticks: { precision: 0, font: { size: isMobile ? 10 : 12 } } }
+    }
+  });
+
+  if (chartHabits) chartHabits.destroy();
+  chartHabits = new Chart(document.getElementById('chartHabits'), {
+    type: 'bar',
+    data: { labels: info.labels, datasets: [{ data: habitsData, backgroundColor: '#4caf50' }] },
+    options: chartOpts('Виконано', '#4caf50', false)
+  });
+
+  if (chartTraining) chartTraining.destroy();
+  chartTraining = new Chart(document.getElementById('chartTraining'), {
+    type: 'bar',
+    data: { labels: info.labels, datasets: [{ data: trainData, backgroundColor: '#9c27b0' }] },
+    options: chartOpts('Тренувань', '#9c27b0', false)
+  });
+
+  if (chartWork) chartWork.destroy();
+  chartWork = new Chart(document.getElementById('chartWork'), {
+    type: 'bar',
+    data: { labels: info.labels, datasets: workDatasets.length ? workDatasets : [{ data: info.keys.map(()=>0), backgroundColor: '#ccc' }] },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: true, position: 'bottom', labels: { font: { size: isMobile ? 10 : 12 }, boxWidth: 12 } } },
+      scales: {
+        x: { stacked: true, ticks: { font: { size: isMobile ? 10 : 12 } } },
+        y: { stacked: true, beginAtZero: true, ticks: { precision: 0, font: { size: isMobile ? 10 : 12 } } }
+      }
+    }
+  });
+}
+
+/* ============ INIT ============ */
+document.getElementById('trainDate').value = todayIso();
+renderJobs();
+renderHabits();
+renderCalendar();
+renderTraining();
+renderCharts();
+
+window.addEventListener('resize', () => {
+  if (document.getElementById('panel-progress').classList.contains('active')) {
+    renderCharts();
+  }
+});
+</script>
+</body>
+</html>
